@@ -209,7 +209,7 @@ async def Colesium_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ➡️ <a href="{dpdl_colesium_link}">{dpdl_colesium_username}</a>
 
 <blockquote>
-💬 Stay connected via <b>DPDL DOMINION</b> – official Hand Cricket updates and announcements.
+💬 Stay connected via <b>DPDL DOMINION</b> – official DPDL updates and announcements.
 </blockquote>
 
 ➡️ <a href="{dpdl_dominion_link}">{dpdl_dominion_username}</a>
