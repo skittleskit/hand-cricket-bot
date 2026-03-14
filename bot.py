@@ -9,7 +9,9 @@ from telegram.ext import (
     filters,
     ContextTypes,
 )
+
 import config
+
 
 # =========================
 # DATABASE
@@ -32,6 +34,7 @@ def load_db():
 
     return data
 
+
 def save_db(data):
     with open("database.json", "w") as f:
         json.dump(data, f, indent=4)
@@ -44,19 +47,26 @@ def is_admin(user_id):
     db = load_db()
     return user_id in db["admins"]
 
+
 # =========================
 # MAIN MENU
 # =========================
 
 def main_menu():
+
     keyboard = [
+
         [InlineKeyboardButton("📝 Register Team", callback_data="register")],
+
         [
-            InlineKeyboardButton("🖇️ Colesium", url="https://t.me/DpdL_Gc"),
+            InlineKeyboardButton("🏟 Colesium", url="https://t.me/DpdL_Gc"),
             InlineKeyboardButton("📜 Rules", callback_data="rules")
         ],
+
         [InlineKeyboardButton("❓ FAQ", callback_data="faq")]
+
     ]
+
     return InlineKeyboardMarkup(keyboard)
 
 # =========================
@@ -64,21 +74,31 @@ def main_menu():
 # =========================
 
 def admin_panel():
+
     keyboard = [
+
         [
-            InlineKeyboardButton("📋 Teams", callback_data="panel_teams"),
+            InlineKeyboardButton("📋 Teams", callback_data="panel_teams_0"),
             InlineKeyboardButton("➕ Add Team", callback_data="panel_addteam")
         ],
+
         [
             InlineKeyboardButton("🟢 Open Reg", callback_data="panel_openreg"),
             InlineKeyboardButton("🔴 Close Reg", callback_data="panel_closereg")
         ],
+
         [
             InlineKeyboardButton("📢 Broadcast", callback_data="panel_broadcast"),
             InlineKeyboardButton("📊 Stats", callback_data="panel_stats")
         ]
+
     ]
+
     return InlineKeyboardMarkup(keyboard)
+
+# =========================
+# ADMIN PANEL COMMAND
+# =========================
 
 async def panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -92,8 +112,14 @@ async def panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 🏏 Tournament: <b>{db['tournament_name']}</b>
 
-Teams Registered: <b>{len(db['captains'])}</b>
-Registrations: {"🟢 OPEN" if db["registration_status"] else "🔴 CLOSED"}
+━━━━━━━━━━━━━━━
+
+🏏 Teams Registered: <b>{len(db['captains'])}</b>
+
+📝 Registrations:
+{"🟢 OPEN" if db["registration_status"] else "🔴 CLOSED"}
+
+━━━━━━━━━━━━━━━
 
 Select an action below.
 """
@@ -104,29 +130,68 @@ Select an action below.
         reply_markup=admin_panel()
     )
 
-async def teams(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    if not is_admin(update.message.from_user.id):
-        return
+# =========================
+# TEAM LIST VIEWER (PAGINATED)
+# =========================
+
+def team_panel(uid, team_data):
+
+    keyboard = [[
+        InlineKeyboardButton("✏️ Edit", callback_data=f"editteam_{uid}"),
+        InlineKeyboardButton("❌ Remove", callback_data=f"removeteam_{uid}")
+    ]]
+
+    return InlineKeyboardMarkup(keyboard)
+
+
+async def show_team_page(query, page):
 
     db = load_db()
 
-    if not db["captains"]:
-        await update.message.reply_text("No teams registered.")
+    teams = list(db["captains"].items())
+
+    if not teams:
+        await query.edit_message_text("⚠️ No teams registered.")
         return
 
-    for uid, data in db["captains"].items():
+    if page >= len(teams):
+        page = len(teams) - 1
 
-        keyboard = [[
+    uid, data = teams[page]
+
+    text = f"""
+📋 <b>TEAM {page+1} / {len(teams)}</b>
+
+━━━━━━━━━━━━━━━
+
+{data['data']}
+
+🆔 <code>{uid}</code>
+"""
+
+    nav = []
+
+    if page > 0:
+        nav.append(InlineKeyboardButton("⬅️ Prev", callback_data=f"panel_teams_{page-1}"))
+
+    if page < len(teams) - 1:
+        nav.append(InlineKeyboardButton("Next ➡️", callback_data=f"panel_teams_{page+1}"))
+
+    keyboard = [
+        [
             InlineKeyboardButton("✏️ Edit", callback_data=f"editteam_{uid}"),
             InlineKeyboardButton("❌ Remove", callback_data=f"removeteam_{uid}")
-        ]]
+        ],
+        nav,
+        [InlineKeyboardButton("🔙 Back Panel", callback_data="panel_back")]
+    ]
 
-        await update.message.reply_text(
-            f"{data['data']}\n\n🆔 <code>{uid}</code>",
-            parse_mode=ParseMode.HTML,
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+    await query.edit_message_text(
+        text,
+        parse_mode=ParseMode.HTML,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
 
 # =========================
 # START
@@ -189,112 +254,161 @@ async def cancel_registration(update: Update, context: ContextTypes.DEFAULT_TYPE
 # =========================
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
     query = update.callback_query
     await query.answer()
+
     data = query.data
-    user_id = str(query.from_user.id)
+
+    if data.startswith("panel_") or data.startswith("removeteam_") or data.startswith("editteam_"):
+
+        if not is_admin(query.from_user.id):
+            await query.answer("Unauthorized", show_alert=True)
+            return
+
     db = load_db()
 
-    # --- Registration Confirmation ---
-    if data == "confirm_registration":
-        if user_id not in db.get("pending_registration", {}):
-            await query.edit_message_text("⚠️ Registration session expired. Please /register again.")
-            return
 
-        pending = db["pending_registration"].pop(user_id)
-        db["captains"][user_id] = {
-            "username": pending["username"],
-            "data": f"🏏 {pending['team_name']}\n👤 {pending['captain_name']}\n💬 {pending['username']}"
-        }
-        save_db(db)
+# =========================
+# PANEL NAVIGATION
+# =========================
 
-        summary_text = (
-            f"📝 <b>NEW TEAM REGISTRATION</b>\n\n"
-            f"🏏 <b>Team Name:</b> {pending['team_name']}\n"
-            f"👤 <b>Captain Name:</b> {pending['captain_name']}\n"
-            f"💬 <b>Captain Username:</b> {pending['username']}\n"
-            f"🆔 <b>User ID:</b> {user_id}"
+    if data == "panel_back":
+
+        text = f"""
+⚙️ <b>ADMIN CONTROL PANEL</b>
+
+🏏 Tournament: <b>{db['tournament_name']}</b>
+
+🏏 Teams: <b>{len(db['captains'])}</b>
+"""
+
+        await query.edit_message_text(
+            text,
+            parse_mode=ParseMode.HTML,
+            reply_markup=admin_panel()
         )
 
-        sent_msg = await context.bot.send_message(
-            chat_id=config.ADMIN_GROUP_ID,
-            text=summary_text,
-            parse_mode=ParseMode.HTML
+
+# =========================
+# TEAM VIEW
+# =========================
+
+    elif data.startswith("panel_teams_"):
+
+        page = int(data.split("_")[2])
+
+        await show_team_page(query, page)
+
+
+# =========================
+# ADD TEAM
+# =========================
+
+    elif data == "panel_addteam":
+
+        context.user_data["add_team"] = True
+
+        await query.edit_message_text(
+"""
+➕ <b>ADD TEAM</b>
+
+Send team details in format:
+
+TEAM NAME | CAPTAIN NAME | @USERNAME
+""",
+parse_mode=ParseMode.HTML
+)
+
+
+# =========================
+# REMOVE TEAM
+# =========================
+
+    elif data.startswith("removeteam_"):
+
+        uid = data.split("_")[1]
+
+        keyboard = [[
+            InlineKeyboardButton("✅ Confirm Delete", callback_data=f"confirmremove_{uid}"),
+            InlineKeyboardButton("❌ Cancel", callback_data="panel_back")
+        ]]
+
+        await query.edit_message_text(
+            "⚠️ Are you sure you want to delete this team?",
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
-        db["message_map"][str(sent_msg.message_id)] = int(user_id)
-        save_db(db)
-        await query.edit_message_text("✅ Registration successful! Kindly subscribe @DPDL_HC for Updates.")
-        return
 
-    # --- Registration Edit ---
-    elif data == "edit_registration":
-        if user_id not in db.get("pending_registration", {}):
-            await query.edit_message_text("⚠️ Registration session expired. Please /register again.")
-            return
-        pending = db["pending_registration"][user_id]
-        pending["step"] = 1
-        save_db(db)
-        await query.edit_message_text("✏️ Registration restarted. Please send your Team Name 🏏:")
-        return
+    elif data.startswith("confirmremove_"):
 
-    # --- Menu Buttons ---
-    elif data == "rules":
-        await rules(update, context)
-    elif data == "faq":
-        await faq(update, context)
-    elif data == "register":
-        await register(update, context)
-        # =========================
-    # ADMIN PANEL BUTTONS
-    # =========================
+        uid = data.split("_")[1]
 
-    elif data == "panel_teams":
+        if uid in db["captains"]:
 
-        db = load_db()
+            removed = db["captains"].pop(uid)
+            save_db(db)
 
-        if not db["captains"]:
-            await query.edit_message_text("No teams registered.")
-            return
-
-        await query.edit_message_text("📋 Registered Teams:")
-
-        for uid, data in db["captains"].items():
-
-            keyboard = [[
-                InlineKeyboardButton("✏️ Edit", callback_data=f"editteam_{uid}"),
-                InlineKeyboardButton("❌ Remove", callback_data=f"removeteam_{uid}")
-            ]]
-
-            await context.bot.send_message(
-                query.message.chat_id,
-                f"{data['data']}\n\n🆔 <code>{uid}</code>",
-                parse_mode=ParseMode.HTML,
-                reply_markup=InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(
+                f"❌ Team removed:\n\n{removed['data']}"
             )
 
 
+# =========================
+# EDIT TEAM
+# =========================
+
+    elif data.startswith("editteam_"):
+
+        uid = data.split("_")[1]
+
+        context.user_data["edit_team"] = uid
+
+        await query.edit_message_text(
+"""
+✏️ <b>EDIT TEAM</b>
+
+Send new details:
+
+TEAM NAME | CAPTAIN | @USERNAME
+""",
+parse_mode=ParseMode.HTML
+)
+
+
+# =========================
+# OPEN REG
+# =========================
+
     elif data == "panel_openreg":
 
-        db = load_db()
         db["registration_status"] = True
         save_db(db)
 
-        await query.edit_message_text("🟢 Registrations OPENED", reply_markup=admin_panel())
+        await query.answer("Registrations Opened")
 
+        await panel(update, context)
+
+
+# =========================
+# CLOSE REG
+# =========================
 
     elif data == "panel_closereg":
 
-        db = load_db()
         db["registration_status"] = False
         save_db(db)
 
-        await query.edit_message_text("🔴 Registrations CLOSED", reply_markup=admin_panel())
+        await query.answer("Registrations Closed")
 
+        await panel(update, context)
+
+
+# =========================
+# STATS
+# =========================
 
     elif data == "panel_stats":
-
-        db = load_db()
 
         text = f"""
 📊 <b>BOT STATISTICS</b>
@@ -304,25 +418,12 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 👮 Admins: {len(db['admins'])}
 """
 
-        await query.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=admin_panel())
-
-    elif data.startswith("removeteam_"):
-
-        uid = data.split("_")[1]
-
-        db = load_db()
-
-        if uid not in db["captains"]:
-            await query.answer("Team not found", show_alert=True)
-            return
-
-        team = db["captains"].pop(uid)
-        save_db(db)
-
         await query.edit_message_text(
-            f"❌ Team Removed\n\n{team['data']}"
+            text,
+            parse_mode=ParseMode.HTML,
+            reply_markup=admin_panel()
         )
-
+    
 # =========================
 # RULES / FAQ / COLESIUM
 # =========================
@@ -524,9 +625,6 @@ async def handle_user_general_message(update, context, db):
 async def admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != config.ADMIN_GROUP_ID:
         return
-    def is_admin(user_id):
-        db = load_db()
-        return user_id in db.get("admins", []) or user_id in config.PERMANENT_ADMINS
     if not update.message.reply_to_message:
         return
 
@@ -635,13 +733,6 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             failed += 1
     await update.message.reply_text(f"Broadcast complete.\nSent: {sent}\nFailed: {failed}")
-
-async def teams(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.message.from_user.id):
-        return
-    db = load_db()
-    msg = "REGISTERED TEAMS\n\n" + "\n\n".join([v["data"] for v in db["captains"].values()])
-    await update.message.reply_text(msg)
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db = load_db()
