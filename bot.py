@@ -57,7 +57,7 @@ def main_menu():
     keyboard = [
         [
             InlineKeyboardButton("📝 Register Team", callback_data="register"),
-            InlineKeyboardButton("📋 Format", callback_data="format")
+            InlineKeyboardButton("🖇️ Colesium", callback_data="Colesium")
         ],
         [
             InlineKeyboardButton("📜 Rules", callback_data="rules"),
@@ -128,8 +128,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "faq":
         await faq(update, context)
 
-    elif query.data == "format":
-        await format_cmd(update, context)
+    elif query.data == "Colesium":
+        await Colesium_cmd(update, context)
 
     elif query.data == "register":
         await register(update, context)
@@ -188,33 +188,43 @@ Check pinned message
 
 
 # =========================
-# FORMAT
+# COLESIUM / DPDL GROUP
 # =========================
 
-async def format_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def Colesium_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Links and usernames
+    dpdl_colesium_link = "https://t.me/DpdL_Gc"
+    dpdl_dominion_link = "https://t.me/DPDL_HC"
+    dpdl_colesium_username = "@DpdL_Gc"
+    dpdl_dominion_username = "@DPDL_HC"
 
-    text = """
-📋 REGISTRATION FORMAT
-
-━━━━━━━━━━━━━━━━━━━━
-
-TEAM NAME:
-CAPTAIN NAME:
-USERNAME:
-PLAYERS:
+    text = f"""
+📋 <b>JOIN THE DPDL HUBS</b>
 
 ━━━━━━━━━━━━━━━━━━━━
 
-Example
+<blockquote>
+🎯 <b>DPDL COLESIUM</b> – The primary hub for all tournament updates, discussions, and registrations.
+</blockquote>
 
-TEAM NAME: Warriors
-CAPTAIN NAME: Alex
-USERNAME: @alex
-PLAYERS: 6
+➡️ <a href="{dpdl_colesium_link}">{dpdl_colesium_username}</a>
+
+<blockquote>
+💬 Stay connected via <b>DPDL DOMINION</b> – official Hand Cricket updates and announcements.
+</blockquote>
+
+➡️ <a href="{dpdl_dominion_link}">{dpdl_dominion_username}</a>
+
+━━━━━━━━━━━━━━━━━━━━
+
+<i>Join now and be part of the DPDL community!</i>
 """
 
-    await update.effective_message.reply_text(text)
-
+    await update.effective_message.reply_text(
+        text,
+        parse_mode=ParseMode.HTML,
+        disable_web_page_preview=True
+    )
 
 # =========================
 # REGISTER
@@ -247,7 +257,6 @@ Send details in format:
 TEAM NAME:
 CAPTAIN NAME:
 USERNAME:
-PLAYERS:
 """
     )
 
@@ -541,7 +550,7 @@ def main():
     app.add_handler(CommandHandler("register", register))
     app.add_handler(CommandHandler("rules", rules))
     app.add_handler(CommandHandler("faq", faq))
-    app.add_handler(CommandHandler("format", format_cmd))
+    app.add_handler(CommandHandler("Colesium", Colesium_cmd))
 
     app.add_handler(CommandHandler("addadmin", add_admin))
     app.add_handler(CommandHandler("removeadmin", remove_admin))
