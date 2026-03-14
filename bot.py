@@ -53,20 +53,21 @@ def is_admin(user_id):
 # =========================
 
 def main_menu():
-
     keyboard = [
+        # Row 1: 1 button centered
+        [InlineKeyboardButton("📝 Register Team", callback_data="register")],
+        
+        # Row 2: 2 buttons side by side
         [
-            InlineKeyboardButton("📝 Register Team", callback_data="register"),
-            InlineKeyboardButton("🖇️ Colesium", url="https://t.me/DpdL_Gc")
+            InlineKeyboardButton("🖇️ Colesium", url="https://t.me/DpdL_Gc"),
+            InlineKeyboardButton("📜 Rules", callback_data="rules")
         ],
-        [
-            InlineKeyboardButton("📜 Rules", callback_data="rules"),
-            InlineKeyboardButton("❓ FAQ", callback_data="faq")
-        ]
+        
+        # Row 3: 1 button centered
+        [InlineKeyboardButton("❓ FAQ", callback_data="faq")]
     ]
 
     return InlineKeyboardMarkup(keyboard)
-
 
 # =========================
 # START
