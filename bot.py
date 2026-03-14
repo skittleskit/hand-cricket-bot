@@ -165,7 +165,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = """📜 TOURNAMENT RULEBOOK
 <u>To be Announced Soon!</u>
-    await update.effective_message.reply_text(text)
+"""
+    await update.effective_message.reply_text(text, parse_mode=ParseMode.HTML)
 
 async def faq(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = """❓ FAQ
@@ -173,7 +174,8 @@ async def faq(update: Update, context: ContextTypes.DEFAULT_TYPE):
 How to register? <blockquote>Use /register</blockquote>
 Where matches happen? <blockquote>DPDL Coliseum</blockquote>
 Prize? <blockquote>Tentative but no commitments</blockquote>
-    await update.effective_message.reply_text(text)
+"""
+    await update.effective_message.reply_text(text, parse_mode=ParseMode.HTML)
 
 async def Colesium_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = """
@@ -227,18 +229,24 @@ async def user_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pending["team_name"] = text.strip()
             pending["step"] = 2
             save_db(db)
-            await update.message.reply_text("👤 <b>STEP 2/3</b>\n\nPlease send the <b>Captain Name</b> ✏️:", parse_mode=ParseMode.HTML)
+            await update.message.reply_text(
+                "👤 <b>STEP 2/3</b>\n\nPlease send the <b>Captain Name</b> ✏️:", parse_mode=ParseMode.HTML
+            )
             return
         elif step == 2:
             pending["captain_name"] = text.strip()
             pending["step"] = 3
             save_db(db)
-            await update.message.reply_text("🔗 <b>STEP 3/3</b>\n\nPlease send the <b>Captain Username</b> (e.g., @username) 💬:", parse_mode=ParseMode.HTML)
+            await update.message.reply_text(
+                "🔗 <b>STEP 3/3</b>\n\nPlease send the <b>Captain Username</b> (e.g., @username) 💬:", parse_mode=ParseMode.HTML
+            )
             return
         elif step == 3:
             username = text.strip()
             if not username.startswith("@"):
-                await update.message.reply_text("❌ Invalid username format. It should start with @. Please try again:")
+                await update.message.reply_text(
+                    "❌ Invalid username format. It should start with @. Please try again:"
+                )
                 return
             pending["username"] = username
             pending["step"] = 4
