@@ -97,6 +97,25 @@ Register your team and compete with the strongest players in the league.
         )
 
 # =========================
+# CANCEL REGISTRATION
+# =========================
+
+async def cancel_registration(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    db = load_db()
+
+    if user_id in db.get("pending_registration", {}):
+        db["pending_registration"].pop(user_id)
+        save_db(db)
+        await update.message.reply_text(
+            "❌ Your registration has been cancelled.\nYou can start again anytime using /register."
+        )
+    else:
+        await update.message.reply_text(
+            "⚠️ You don't have any ongoing registration to cancel."
+        )
+
+# =========================
 # MENU HANDLER
 # =========================
 
@@ -430,6 +449,7 @@ def main():
     app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CommandHandler("teams", teams))
     app.add_handler(CommandHandler("stats", stats))
+    app.add_handler(CommandHandler("cancel", cancel_registration))
 
     app.add_handler(CallbackQueryHandler(menu_handler))
     app.add_handler(MessageHandler(filters.ChatType.PRIVATE, user_message))
