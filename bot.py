@@ -155,7 +155,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         db["message_map"][str(sent_msg.message_id)] = int(user_id)
         save_db(db)
-        await query.edit_message_text("✅ Registration successful! Welcome to the tournament 🏆")
+        await query.edit_message_text("✅ Registration successful! Kindly subscribe @DPDL_HC for Updates.")
         return
 
     # --- Registration Edit ---
@@ -232,10 +232,10 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         # In group → show button to start in DM
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("📝 Start Registration in DM", url=f"t.me/{context.bot.username}?start=register")]
+            [InlineKeyboardButton("📩Register", url=f"t.me/{context.bot.username}?start=register")]
         ])
         await update.effective_message.reply_text(
-            "⚡ Registration must be completed in private chat.\nClick the button below to start:",
+            "Registration must be completed in the private chat! ⬇️",
             reply_markup=keyboard
         )
 # =========================
