@@ -57,7 +57,7 @@ def main_menu():
     keyboard = [
         [
             InlineKeyboardButton("📝 Register Team", callback_data="register"),
-            InlineKeyboardButton("🖇️ Colesium", callback_data="Colesium")
+            InlineKeyboardButton("🖇️ Colesium", url=https://t.me/DpdL_Gc)
         ],
         [
             InlineKeyboardButton("📜 Rules", callback_data="rules"),
