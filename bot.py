@@ -221,7 +221,9 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db["pending_registration"][user_id] = {"step": 1}
     save_db(db)
     await update.effective_message.reply_text(
-        "📝 <b>TEAM REGISTRATION - STEP 1/3</b>\n\nPlease send your <b>Team Name</b> 🏏:", parse_mode=ParseMode.HTML
+        "📝 <b>TEAM REGISTRATION - STEP 1/3</b>\n\n"
+        "Welcome to the tournament! Let's start by setting up your team.\n\n"
+        "🏏 <b>Team Name:</b>\nSend the name your team will compete with.", parse_mode=ParseMode.HTML
     )
 
 # =========================
@@ -249,7 +251,9 @@ async def user_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pending["step"] = 2
             save_db(db)
             await update.message.reply_text(
-                "👤 <b>STEP 2/3</b>\n\nPlease send the <b>Captain Name</b> ✏️:", parse_mode=ParseMode.HTML
+                "👤 <b>STEP 2/3</b>\n\n"
+                "Great! Now, tell us who will lead your team.\n\n"
+                "🧢 <b>Captain Name:</b>\nSend the full name of your team captain.", parse_mode=ParseMode.HTML
             )
             return
         elif step == 2:
@@ -257,7 +261,9 @@ async def user_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pending["step"] = 3
             save_db(db)
             await update.message.reply_text(
-                "🔗 <b>STEP 3/3</b>\n\nPlease send the <b>Captain Username</b> (e.g., @username) 💬:", parse_mode=ParseMode.HTML
+                "🔗 <b>STEP 3/3</b>\n\n"
+                "Almost done! We need your Telegram handle for contact and updates.\n\n"
+                "💬 <b>Captain Username:</b>\nSend it in format @username", parse_mode=ParseMode.HTML
             )
             return
         elif step == 3:
