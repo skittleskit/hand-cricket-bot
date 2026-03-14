@@ -107,11 +107,11 @@ async def cancel_registration(update: Update, context: ContextTypes.DEFAULT_TYPE
     if user_id in db.get("pending_registration", {}):
         db["pending_registration"].pop(user_id)
         save_db(db)
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             "❌ Your registration has been cancelled.\nYou can start again anytime using /register."
         )
     else:
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             "⚠️ You don't have any ongoing registration to cancel."
         )
 
@@ -211,21 +211,33 @@ async def Colesium_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db = load_db()
+    user_id = str(update.effective_user.id)
+
     if not db["registration_status"]:
         await update.effective_message.reply_text(
             f"🚫<b>REGISTRATIONS CLOSED</b>\n\n🏏 {db['tournament_name']}", parse_mode=ParseMode.HTML
         )
         return
 
-    user_id = str(update.effective_user.id)
-    db["pending_registration"][user_id] = {"step": 1}
-    save_db(db)
-    await update.effective_message.reply_text(
-        "📝 <b>TEAM REGISTRATION - STEP 1/3</b>\n\n"
-        "Welcome to the tournament! Let's start by setting up your team.\n\n"
-        "🏏 <b>Team Name:</b>\nSend the name your team will compete with.", parse_mode=ParseMode.HTML
-    )
-
+    if update.effective_chat.type == ChatType.PRIVATE:
+        # Direct DM registration
+        db["pending_registration"][user_id] = {"step": 1}
+        save_db(db)
+        await update.effective_message.reply_text(
+            "📝 <b>TEAM REGISTRATION - STEP 1/3</b>\n\n"
+            "Welcome to the tournament! Let's start by setting up your team.\n\n"
+            "🏏 <b>Team Name:</b>\nSend the name your team will compete with.",
+            parse_mode=ParseMode.HTML
+        )
+    else:
+        # In group → show button to start in DM
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📝 Start Registration in DM", url=f"t.me/{context.bot.username}?start=register")]
+        ])
+        await update.effective_message.reply_text(
+            "⚡ Registration must be completed in private chat.\nClick the button below to start:",
+            reply_markup=keyboard
+        )
 # =========================
 # USER MESSAGE HANDLER
 # =========================
