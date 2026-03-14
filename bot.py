@@ -116,23 +116,69 @@ players in the league.
             reply_markup=main_menu()
         )
 # =========================
-# MENU HANDLER
+# MENU HANDLER (Unified)
 # =========================
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     query = update.callback_query
     await query.answer()
+    data = query.data
+    user_id = str(query.from_user.id)
+    db = load_db()
 
-    if query.data == "rules":
+    # --- Registration Confirmation ---
+    if data == "confirm_registration":
+        if user_id not in db.get("pending_registration", {}):
+            await query.edit_message_text("⚠️ Registration session expired. Please /register again.")
+            return
+
+        pending = db["pending_registration"].pop(user_id)
+        db["captains"][user_id] = {
+            "username": pending["username"],
+            "data": f"🏏 {pending['team_name']}\n👤 {pending['captain_name']}\n💬 {pending['username']}"
+        }
+        save_db(db)
+
+        # --- Forward registration to admin group ---
+        summary_text = (
+            f"📝 <b>NEW TEAM REGISTRATION</b>\n\n"
+            f"🏏 <b>Team Name:</b> {pending['team_name']}\n"
+            f"👤 <b>Captain Name:</b> {pending['captain_name']}\n"
+            f"💬 <b>Captain Username:</b> {pending['username']}\n"
+            f"🆔 <b>User ID:</b> {user_id}"
+        )
+
+        sent_msg = await context.bot.send_message(
+            chat_id=config.ADMIN_GROUP_ID,
+            text=summary_text,
+            parse_mode=ParseMode.HTML
+        )
+
+        # Map for admin replies
+        db["message_map"][str(sent_msg.message_id)] = int(user_id)
+        save_db(db)
+        await query.edit_message_text("✅ Registration successful! Welcome to the tournament 🏆")
+        return
+
+    # --- Registration Edit ---
+    elif data == "edit_registration":
+        if user_id not in db.get("pending_registration", {}):
+            await query.edit_message_text("⚠️ Registration session expired. Please /register again.")
+            return
+
+        pending = db["pending_registration"][user_id]
+        pending["step"] = 1  # Restart flow
+        save_db(db)
+        await query.edit_message_text("✏️ Registration restarted. Please send your Team Name 🏏:")
+        return
+
+    # --- Menu Buttons ---
+    elif data == "rules":
         await rules(update, context)
-
-    elif query.data == "faq":
+    elif data == "faq":
         await faq(update, context)
-
-    elif query.data == "register":
+    elif data == "register":
         await register(update, context)
-
 
 # =========================
 # RULES
@@ -253,10 +299,6 @@ f"🚫 <b>REGISTRATIONS CLOSED</b>\n\n🏏 {db['tournament_name']}\n\nRegistrati
     )
 
 
-# =========================
-# USER MESSAGE HANDLER (Updated for Step-by-Step Registration)
-# =========================
-
 async def user_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != ChatType.PRIVATE:
         return
@@ -266,16 +308,17 @@ async def user_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text or ""
     db = load_db()
 
-    # Initialize pending_registration if not exists
+    # Ensure pending_registration exists
     db.setdefault("pending_registration", {})
 
-    # Check if user is in pending registration
+    # -----------------------------
+    # Step-by-Step Team Registration
+    # -----------------------------
     if user_id in db["pending_registration"]:
         pending = db["pending_registration"][user_id]
         step = pending.get("step", 1)
 
         if step == 1:
-            # Capture team name
             pending["team_name"] = text.strip()
             pending["step"] = 2
             save_db(db)
@@ -286,7 +329,6 @@ async def user_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         elif step == 2:
-            # Capture captain name
             pending["captain_name"] = text.strip()
             pending["step"] = 3
             save_db(db)
@@ -297,15 +339,16 @@ async def user_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         elif step == 3:
-            # Capture captain username and show confirmation
             username = text.strip()
             if not username.startswith("@"):
                 await update.message.reply_text("❌ Invalid username format. It should start with @. Please try again:")
                 return
 
             pending["username"] = username
+            pending["step"] = 4  # Waiting for confirmation
+            save_db(db)
 
-            # Show confirmation summary
+            # Show confirmation summary with buttons
             summary = (
 f"📋 <b>REGISTRATION SUMMARY</b>\n\n"
 f"🏏 <b>Team Name:</b> {pending['team_name']}\n"
@@ -324,59 +367,12 @@ f"💬 <b>Captain Username:</b> {pending['username']}\n\n"
                 parse_mode=ParseMode.HTML,
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
-            pending["step"] = 4  # Waiting for confirmation
-            save_db(db)
             return
 
-    # If not in registration flow, treat as normal user message
+    # -----------------------------
+    # General User Messages (forward to admin)
+    # -----------------------------
     await handle_user_general_message(update, context, db)
-
-
-# =========================
-# CALLBACK HANDLER FOR CONFIRMATION
-# =========================
-
-async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    data = query.data
-    user_id = str(query.from_user.id)
-    db = load_db()
-
-    # Handle registration confirmation
-    if data == "confirm_registration":
-        if user_id not in db["pending_registration"]:
-            await query.edit_message_text("⚠️ Registration session expired. Please /register again.")
-            return
-
-        pending = db["pending_registration"].pop(user_id)
-        db["captains"][user_id] = {
-            "username": pending["username"],
-            "data": f"🏏 {pending['team_name']}\n👤 {pending['captain_name']}\n💬 {pending['username']}"
-        }
-        save_db(db)
-
-        await query.edit_message_text("✅ Registration successful! Welcome to the tournament 🏆")
-        return
-
-    elif data == "edit_registration":
-        if user_id not in db["pending_registration"]:
-            await query.edit_message_text("⚠️ Registration session expired. Please /register again.")
-            return
-
-        pending = db["pending_registration"][user_id]
-        pending["step"] = 1  # Restart flow
-        save_db(db)
-        await query.edit_message_text("✏️ Registration restarted. Please send your Team Name 🏏:")
-        return
-
-    # Handle menu buttons
-    elif data == "rules":
-        await rules(update, context)
-    elif data == "faq":
-        await faq(update, context)
-    elif data == "register":
-        await register(update, context)
 
 
 # =========================
@@ -396,6 +392,12 @@ async def handle_user_general_message(update, context, db):
 
     if update.message.text:
         sent = await context.bot.send_message(config.ADMIN_GROUP_ID, f"{header}\n{text}")
+    elif update.message.sticker:
+        sent = await context.bot.send_sticker(config.ADMIN_GROUP_ID, update.message.sticker.file_id)
+    elif update.message.photo:
+        sent = await context.bot.send_photo(config.ADMIN_GROUP_ID, update.message.photo[-1].file_id)
+    elif update.message.document:
+        sent = await context.bot.send_document(config.ADMIN_GROUP_ID, update.message.document.file_id)
         db["message_map"][str(sent.message_id)] = user.id
         save_db(db)
 
