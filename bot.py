@@ -314,8 +314,9 @@ async def handle_user_general_message(update, context, db):
 async def admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != config.ADMIN_GROUP_ID:
         return
-    if not is_admin(update.message.from_user.id):
-        return
+    def is_admin(user_id):
+        db = load_db()
+        return user_id in db.get("admins", []) or user_id in config.PERMANENT_ADMINS
     if not update.message.reply_to_message:
         return
 
