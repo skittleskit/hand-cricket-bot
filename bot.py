@@ -75,18 +75,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = f"""
 <b>🏏 {db['tournament_name']}</b>
 <u>Official tournament registration system</u>
-
 <blockquote>
 Welcome, <b>{user}</b>.
 Register your team and compete with the strongest players in the league.
 </blockquote>
-
 <b>Features</b>
 • Team registration  
 • Tournament announcements  
 • Direct admin support  
 • Match coordination  
-
 <blockquote>
 <i>Use the menu below to continue.</i>
 </blockquote>
