@@ -28,7 +28,7 @@ def load_db():
     data.setdefault("message_map", {})
     data.setdefault("admins", [config.OWNER_ID])
     data.setdefault("registration_status", False)
-    data.setdefault("tournament_name", "Hand Cricket League")
+    data.setdefault("tournament_name", "Dice Pe Destiny League")
     data.setdefault("users", [])
 
     return data
@@ -107,9 +107,11 @@ players in the league.
 <i>Use the menu below to continue.</i>
 </blockquote>
 """
-
-    await update.message.reply_text(
-        text,
+    
+    with open("banner.png", "rb") as photo:
+    await update.message.reply_photo(
+        photo=BANNER_URL,
+        caption=text,
         parse_mode=ParseMode.HTML,
         reply_markup=main_menu()
     )
