@@ -57,7 +57,7 @@ def main_menu():
     keyboard = [
         [
             InlineKeyboardButton("📝 Register Team", callback_data="register"),
-            InlineKeyboardButton("🖇️ Colesium", callback_data="Colesium")
+            InlineKeyboardButton("🖇️ Colesium", url="https://t.me/DpdL_Gc")
         ],
         [
             InlineKeyboardButton("📜 Rules", callback_data="rules"),
@@ -127,9 +127,6 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data == "faq":
         await faq(update, context)
-
-    elif query.data == "Colesium":
-        await Colesium_cmd(update, context)
 
     elif query.data == "register":
         await register(update, context)
