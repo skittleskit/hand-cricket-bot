@@ -755,7 +755,6 @@ def main():
     app.add_handler(CommandHandler("openregistrations", open_reg))
     app.add_handler(CommandHandler("closeregistrations", close_reg))
     app.add_handler(CommandHandler("broadcast", broadcast))
-    app.add_handler(CommandHandler("teams", teams))
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(CommandHandler("cancel", cancel_registration))
     app.add_handler(CommandHandler("panel", panel))
