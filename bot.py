@@ -87,8 +87,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = f"""
 <b>🏏 {db['tournament_name']}</b>
-
-<i>Official tournament registration system</i>
+<u>Official tournament registration system</u>
 
 <blockquote>
 Welcome, <b>{user}</b>.
