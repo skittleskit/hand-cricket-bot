@@ -110,7 +110,7 @@ players in the league.
     
     with open("banner.png", "rb") as photo:
         await update.message.reply_photo(
-            photo=BANNER_URL,
+            photo=photo,
             caption=text,
             parse_mode=ParseMode.HTML,
             reply_markup=main_menu()
