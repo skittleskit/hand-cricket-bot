@@ -9,9 +9,7 @@ from telegram.ext import (
     filters,
     ContextTypes,
 )
-
 import config
-
 
 # =========================
 # DATABASE
@@ -30,14 +28,13 @@ def load_db():
     data.setdefault("registration_status", False)
     data.setdefault("tournament_name", "Dice Pe Destiny League")
     data.setdefault("users", [])
+    data.setdefault("pending_registration", {})
 
     return data
-
 
 def save_db(data):
     with open("database.json", "w") as f:
         json.dump(data, f, indent=4)
-
 
 # =========================
 # ADMIN CHECK
@@ -47,26 +44,19 @@ def is_admin(user_id):
     db = load_db()
     return user_id in db["admins"]
 
-
 # =========================
 # MAIN MENU
 # =========================
 
 def main_menu():
     keyboard = [
-        # Row 1: 1 button centered
         [InlineKeyboardButton("📝 Register Team", callback_data="register")],
-        
-        # Row 2: 2 buttons side by side
         [
             InlineKeyboardButton("🖇️ Colesium", url="https://t.me/DpdL_Gc"),
             InlineKeyboardButton("📜 Rules", callback_data="rules")
         ],
-        
-        # Row 3: 1 button centered
         [InlineKeyboardButton("❓ FAQ", callback_data="faq")]
     ]
-
     return InlineKeyboardMarkup(keyboard)
 
 # =========================
@@ -74,13 +64,10 @@ def main_menu():
 # =========================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     db = load_db()
-
     user = update.effective_user.first_name
     user_id = update.effective_user.id
 
-    # Save user for broadcast
     if user_id not in db["users"]:
         db["users"].append(user_id)
         save_db(db)
@@ -91,13 +78,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 <blockquote>
 Welcome, <b>{user}</b>.
-
-Register your team and compete with the strongest
-players in the league.
+Register your team and compete with the strongest players in the league.
 </blockquote>
 
 <b>Features</b>
-
 • Team registration  
 • Tournament announcements  
 • Direct admin support  
@@ -107,7 +91,6 @@ players in the league.
 <i>Use the menu below to continue.</i>
 </blockquote>
 """
-    
     with open("banner.png", "rb") as photo:
         await update.message.reply_photo(
             photo=photo,
@@ -115,8 +98,9 @@ players in the league.
             parse_mode=ParseMode.HTML,
             reply_markup=main_menu()
         )
+
 # =========================
-# MENU HANDLER (Unified)
+# MENU HANDLER
 # =========================
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -139,7 +123,6 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
         save_db(db)
 
-        # --- Forward registration to admin group ---
         summary_text = (
             f"📝 <b>NEW TEAM REGISTRATION</b>\n\n"
             f"🏏 <b>Team Name:</b> {pending['team_name']}\n"
@@ -154,7 +137,6 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.HTML
         )
 
-        # Map for admin replies
         db["message_map"][str(sent_msg.message_id)] = int(user_id)
         save_db(db)
         await query.edit_message_text("✅ Registration successful! Welcome to the tournament 🏆")
@@ -165,9 +147,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user_id not in db.get("pending_registration", {}):
             await query.edit_message_text("⚠️ Registration session expired. Please /register again.")
             return
-
         pending = db["pending_registration"][user_id]
-        pending["step"] = 1  # Restart flow
+        pending["step"] = 1
         save_db(db)
         await query.edit_message_text("✏️ Registration restarted. Please send your Team Name 🏏:")
         return
@@ -181,95 +162,36 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await register(update, context)
 
 # =========================
-# RULES
+# RULES / FAQ / COLESIUM
 # =========================
 
 async def rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    text = """
-📜 TOURNAMENT RULEBOOK
-
+    text = """📜 TOURNAMENT RULEBOOK
 ━━━━━━━━━━━━━━━━━━━━
-
 1️⃣ One captain per team
-
 2️⃣ Use /register to apply
-
-3️⃣ Fake registrations
-lead to disqualification
-
+3️⃣ Fake registrations lead to disqualification
 4️⃣ Respect all players
-
 5️⃣ Follow match timing
-
-━━━━━━━━━━━━━━━━━━━━
-"""
-
+━━━━━━━━━━━━━━━━━━━━"""
     await update.effective_message.reply_text(text)
-
-
-# =========================
-# FAQ
-# =========================
 
 async def faq(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    text = """
-❓ FAQ
-
+    text = """❓ FAQ
 ━━━━━━━━━━━━━━━━━━━━
-
-How to register?
-Use /register
-
-Where matches happen?
-Inside Telegram
-
-Entry Fee?
-Check pinned message
-"""
-
+How to register? Use /register
+Where matches happen? Inside Telegram
+Entry Fee? Check pinned message"""
     await update.effective_message.reply_text(text)
 
-
-# =========================
-# COLESIUM / DPDL GROUP
-# =========================
-
 async def Colesium_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Links and usernames
-    dpdl_colesium_link = "https://t.me/DpdL_Gc"
-    dpdl_dominion_link = "https://t.me/DPDL_HC"
-    dpdl_colesium_username = "@DpdL_Gc"
-    dpdl_dominion_username = "@DPDL_HC"
-
-    text = f"""
+    text = """
 📋 <b>JOIN THE DPDL HUBS</b>
-
 ━━━━━━━━━━━━━━━━━━━━
-
-<blockquote>
-🎯 <b>DPDL COLESIUM</b> – The primary hub for all tournament updates, discussions, and registrations.
-</blockquote>
-
-➡️ <a href="{dpdl_colesium_link}">{dpdl_colesium_username}</a>
-
-<blockquote>
-💬 Stay connected via <b>DPDL DOMINION</b> – official DPDL updates and announcements.
-</blockquote>
-
-➡️ <a href="{dpdl_dominion_link}">{dpdl_dominion_username}</a>
-
-━━━━━━━━━━━━━━━━━━━━
-
-<i>Join now and be part of the DPDL community!</i>
+➡️ <a href="https://t.me/DpdL_Gc">@DpdL_Gc</a>
+➡️ <a href="https://t.me/DPDL_HC">@DPDL_HC</a>
 """
-
-    await update.effective_message.reply_text(
-        text,
-        parse_mode=ParseMode.HTML,
-        disable_web_page_preview=True
-    )
+    await update.effective_message.reply_text(text, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
 
 # =========================
 # REGISTER
@@ -277,27 +199,22 @@ async def Colesium_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db = load_db()
-
     if not db["registration_status"]:
         await update.effective_message.reply_text(
-f"🚫 <b>REGISTRATIONS CLOSED</b>\n\n🏏 {db['tournament_name']}\n\nRegistrations will open soon.",
-            parse_mode=ParseMode.HTML
+            f"🚫 <b>REGISTRATIONS CLOSED</b>\n\n🏏 {db['tournament_name']}", parse_mode=ParseMode.HTML
         )
         return
 
-    user_id = update.effective_user.id
-    db.setdefault("pending_registration", {})
-
-    # If user is already in pending registration, restart from step 1
-    db["pending_registration"][str(user_id)] = {"step": 1}
+    user_id = str(update.effective_user.id)
+    db["pending_registration"][user_id] = {"step": 1}
     save_db(db)
-
     await update.effective_message.reply_text(
-        "📝 <b>TEAM REGISTRATION - STEP 1/3</b>\n\n"
-        "Please send your <b>Team Name</b> 🏏:",
-        parse_mode=ParseMode.HTML
+        "📝 <b>TEAM REGISTRATION - STEP 1/3</b>\n\nPlease send your <b>Team Name</b> 🏏:", parse_mode=ParseMode.HTML
     )
 
+# =========================
+# USER MESSAGE HANDLER
+# =========================
 
 async def user_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != ChatType.PRIVATE:
@@ -308,11 +225,8 @@ async def user_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text or ""
     db = load_db()
 
-    # Ensure pending_registration exists
-    db.setdefault("pending_registration", {})
-
     # -----------------------------
-    # Step-by-Step Team Registration
+    # Step-by-Step Registration
     # -----------------------------
     if user_id in db["pending_registration"]:
         pending = db["pending_registration"][user_id]
@@ -322,33 +236,23 @@ async def user_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pending["team_name"] = text.strip()
             pending["step"] = 2
             save_db(db)
-            await update.message.reply_text(
-                "👤 <b>STEP 2/3</b>\n\nPlease send the <b>Captain Name</b> ✏️:",
-                parse_mode=ParseMode.HTML
-            )
+            await update.message.reply_text("👤 <b>STEP 2/3</b>\n\nPlease send the <b>Captain Name</b> ✏️:", parse_mode=ParseMode.HTML)
             return
-
         elif step == 2:
             pending["captain_name"] = text.strip()
             pending["step"] = 3
             save_db(db)
-            await update.message.reply_text(
-                "🔗 <b>STEP 3/3</b>\n\nPlease send the <b>Captain Username</b> (e.g., @username) 💬:",
-                parse_mode=ParseMode.HTML
-            )
+            await update.message.reply_text("🔗 <b>STEP 3/3</b>\n\nPlease send the <b>Captain Username</b> (e.g., @username) 💬:", parse_mode=ParseMode.HTML)
             return
-
         elif step == 3:
             username = text.strip()
             if not username.startswith("@"):
                 await update.message.reply_text("❌ Invalid username format. It should start with @. Please try again:")
                 return
-
             pending["username"] = username
-            pending["step"] = 4  # Waiting for confirmation
+            pending["step"] = 4
             save_db(db)
 
-            # Show confirmation summary with buttons
             summary = (
 f"📋 <b>REGISTRATION SUMMARY</b>\n\n"
 f"🏏 <b>Team Name:</b> {pending['team_name']}\n"
@@ -356,49 +260,52 @@ f"👤 <b>Captain Name:</b> {pending['captain_name']}\n"
 f"💬 <b>Captain Username:</b> {pending['username']}\n\n"
 "Please confirm your registration ✅ or edit ✏️"
             )
-
-            keyboard = [
-                [InlineKeyboardButton("✅ Confirm", callback_data="confirm_registration"),
-                 InlineKeyboardButton("✏️ Edit", callback_data="edit_registration")]
-            ]
-
-            await update.message.reply_text(
-                summary,
-                parse_mode=ParseMode.HTML,
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
+            keyboard = [[
+                InlineKeyboardButton("✅ Confirm", callback_data="confirm_registration"),
+                InlineKeyboardButton("✏️ Edit", callback_data="edit_registration")
+            ]]
+            await update.message.reply_text(summary, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(keyboard))
             return
 
     # -----------------------------
-    # General User Messages (forward to admin)
+    # General messages → Admin
     # -----------------------------
     await handle_user_general_message(update, context, db)
 
+# =========================
+# FORWARD USER MESSAGES TO ADMIN
+# =========================
 
-# =========================
-# Helper function for general user messages outside registration
-# =========================
 async def handle_user_general_message(update, context, db):
     user = update.message.from_user
     username = f"@{user.username}" if user.username else "NoUsername"
-    text = update.message.text or ""
+    header = f"📩 USER MESSAGE\n👤 {user.first_name}\n🔗 {username}\n🆔 {user.id}"
 
-    header = f"""
-📩 USER MESSAGE
-👤 {user.first_name}
-🔗 {username}
-🆔 {user.id}
-"""
+    sent_msg = None
 
     if update.message.text:
-        sent = await context.bot.send_message(config.ADMIN_GROUP_ID, f"{header}\n{text}")
+        sent_msg = await context.bot.send_message(config.ADMIN_GROUP_ID, f"{header}\n\n{update.message.text}")
     elif update.message.sticker:
-        sent = await context.bot.send_sticker(config.ADMIN_GROUP_ID, update.message.sticker.file_id)
+        sent_msg = await context.bot.send_message(config.ADMIN_GROUP_ID, header)
+        await context.bot.send_sticker(config.ADMIN_GROUP_ID, update.message.sticker.file_id)
     elif update.message.photo:
-        sent = await context.bot.send_photo(config.ADMIN_GROUP_ID, update.message.photo[-1].file_id)
+        caption = update.message.caption or ""
+        sent_msg = await context.bot.send_photo(
+            config.ADMIN_GROUP_ID,
+            update.message.photo[-1].file_id,
+            caption=f"{header}\n\n{caption}" if caption else header
+        )
     elif update.message.document:
-        sent = await context.bot.send_document(config.ADMIN_GROUP_ID, update.message.document.file_id)
-        db["message_map"][str(sent.message_id)] = user.id
+        caption = update.message.caption or ""
+        sent_msg = await context.bot.send_document(
+            config.ADMIN_GROUP_ID,
+            update.message.document.file_id,
+            caption=f"{header}\n\n{caption}" if caption else header
+        )
+
+    if sent_msg:
+        db.setdefault("message_map", {})
+        db["message_map"][str(sent_msg.message_id)] = user.id
         save_db(db)
 
 # =========================
@@ -406,217 +313,130 @@ async def handle_user_general_message(update, context, db):
 # =========================
 
 async def admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     if update.effective_chat.id != config.ADMIN_GROUP_ID:
         return
-
     if not is_admin(update.message.from_user.id):
         return
-
     if not update.message.reply_to_message:
         return
 
     db = load_db()
-
     replied = str(update.message.reply_to_message.message_id)
-
-    if replied not in db["message_map"]:
+    if replied not in db.get("message_map", {}):
         return
 
     user_id = db["message_map"][replied]
 
     if update.message.text:
         await context.bot.send_message(user_id, update.message.text)
-
     elif update.message.sticker:
         await context.bot.send_sticker(user_id, update.message.sticker.file_id)
-
     elif update.message.photo:
-        await context.bot.send_photo(user_id, update.message.photo[-1].file_id)
-
+        caption = update.message.caption or ""
+        await context.bot.send_photo(user_id, update.message.photo[-1].file_id, caption=caption)
     elif update.message.document:
-        await context.bot.send_document(user_id, update.message.document.file_id)
-
+        caption = update.message.caption or ""
+        await context.bot.send_document(user_id, update.message.document.file_id, caption=caption)
 
 # =========================
 # ADMIN COMMANDS
 # =========================
 
 async def add_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     if update.message.from_user.id != config.OWNER_ID:
         return
-
     uid = int(context.args[0])
-
     db = load_db()
-
     if uid not in db["admins"]:
         db["admins"].append(uid)
         save_db(db)
-
     await update.message.reply_text("Admin added.")
 
-
 async def remove_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     if update.message.from_user.id != config.OWNER_ID:
         return
-
     uid = int(context.args[0])
-
     db = load_db()
-
     if uid in db["admins"]:
         db["admins"].remove(uid)
         save_db(db)
-
     await update.message.reply_text("Admin removed.")
 
-
 async def admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     db = load_db()
-
-    msg = "Admins:\n\n"
-
-    for a in db["admins"]:
-        msg += f"{a}\n"
-
+    msg = "Admins:\n\n" + "\n".join(str(a) for a in db["admins"])
     await update.message.reply_text(msg)
-
 
 async def open_reg(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     if not is_admin(update.message.from_user.id):
         return
-
     db = load_db()
-
     db["registration_status"] = True
     save_db(db)
-
     await update.message.reply_text("Registrations opened.")
 
-
 async def close_reg(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     if not is_admin(update.message.from_user.id):
         return
-
     db = load_db()
-
     db["registration_status"] = False
     save_db(db)
-
     await update.message.reply_text("Registrations closed.")
 
-
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     if not is_admin(update.message.from_user.id):
         return
-
     if not context.args:
-        await update.message.reply_text(
-            "Usage:\n/broadcast Your message"
-        )
+        await update.message.reply_text("Usage:\n/broadcast Your message")
         return
-
     msg = " ".join(context.args)
-
     db = load_db()
-
-    sent = 0
-    failed = 0
-
+    sent = failed = 0
     for uid in db["users"]:
-
         try:
-            await context.bot.send_message(
-                chat_id=uid,
-                text=f"""
-📢 <b>Tournament Announcement</b>
-
-{msg}
-""",
-                parse_mode=ParseMode.HTML
-            )
-
+            await context.bot.send_message(uid, f"📢 <b>Tournament Announcement</b>\n\n{msg}", parse_mode=ParseMode.HTML)
             sent += 1
-
         except:
             failed += 1
-
-    await update.message.reply_text(
-        f"Broadcast complete.\n\nSent: {sent}\nFailed: {failed}"
-    )
+    await update.message.reply_text(f"Broadcast complete.\nSent: {sent}\nFailed: {failed}")
 
 async def teams(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     if not is_admin(update.message.from_user.id):
         return
-
     db = load_db()
-
-    msg = "REGISTERED TEAMS\n\n"
-
-    for uid, data in db["captains"].items():
-        msg += f"{data['data']}\n\n"
-
+    msg = "REGISTERED TEAMS\n\n" + "\n\n".join([v["data"] for v in db["captains"].values()])
     await update.message.reply_text(msg)
 
-
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     db = load_db()
-
-    teams = len(db["captains"])
-    admins = len(db["admins"])
-
-    await update.message.reply_text(
-f"""
-BOT STATS
-
-Teams registered: {teams}
-Admins: {admins}
-"""
-    )
-
+    await update.message.reply_text(f"BOT STATS\n\nTeams registered: {len(db['captains'])}\nAdmins: {len(db['admins'])}")
 
 # =========================
 # MAIN
 # =========================
 
 def main():
-
     app = Application.builder().token(config.BOT_TOKEN).build()
-
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("register", register))
     app.add_handler(CommandHandler("rules", rules))
     app.add_handler(CommandHandler("faq", faq))
     app.add_handler(CommandHandler("Colesium", Colesium_cmd))
-
     app.add_handler(CommandHandler("addadmin", add_admin))
     app.add_handler(CommandHandler("removeadmin", remove_admin))
     app.add_handler(CommandHandler("admins", admins))
-
     app.add_handler(CommandHandler("openregistrations", open_reg))
     app.add_handler(CommandHandler("closeregistrations", close_reg))
-
     app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CommandHandler("teams", teams))
     app.add_handler(CommandHandler("stats", stats))
 
     app.add_handler(CallbackQueryHandler(menu_handler))
-
     app.add_handler(MessageHandler(filters.ChatType.PRIVATE, user_message))
     app.add_handler(MessageHandler(filters.Chat(config.ADMIN_GROUP_ID) & filters.REPLY, admin_reply))
 
     print("Bot Running...")
     app.run_polling()
-
 
 if __name__ == "__main__":
     main()
