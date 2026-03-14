@@ -164,21 +164,15 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def rules(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = """📜 TOURNAMENT RULEBOOK
-━━━━━━━━━━━━━━━━━━━━
-1️⃣ One captain per team
-2️⃣ Use /register to apply
-3️⃣ Fake registrations lead to disqualification
-4️⃣ Respect all players
-5️⃣ Follow match timing
-━━━━━━━━━━━━━━━━━━━━"""
+<u>To be Announced Soon!</u>
     await update.effective_message.reply_text(text)
 
 async def faq(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = """❓ FAQ
 ━━━━━━━━━━━━━━━━━━━━
-How to register? Use /register
-Where matches happen? Inside Telegram
-Entry Fee? Check pinned message"""
+How to register? <blockquote>Use /register</blockquote>
+Where matches happen? <blockquote>DPDL Coliseum</blockquote>
+Prize? <blockquote>Tentative but no commitments</blockquote>
     await update.effective_message.reply_text(text)
 
 async def Colesium_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -198,7 +192,7 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db = load_db()
     if not db["registration_status"]:
         await update.effective_message.reply_text(
-            f"🚫 <b>REGISTRATIONS CLOSED</b>\n\n🏏 {db['tournament_name']}", parse_mode=ParseMode.HTML
+            f"🚫<b>REGISTRATIONS CLOSED</b>\n\n🏏 {db['tournament_name']}", parse_mode=ParseMode.HTML
         )
         return
 
