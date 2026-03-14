@@ -60,6 +60,75 @@ def main_menu():
     return InlineKeyboardMarkup(keyboard)
 
 # =========================
+# ADMIN PANEL UI
+# =========================
+
+def admin_panel():
+    keyboard = [
+        [
+            InlineKeyboardButton("📋 Teams", callback_data="panel_teams"),
+            InlineKeyboardButton("➕ Add Team", callback_data="panel_addteam")
+        ],
+        [
+            InlineKeyboardButton("🟢 Open Reg", callback_data="panel_openreg"),
+            InlineKeyboardButton("🔴 Close Reg", callback_data="panel_closereg")
+        ],
+        [
+            InlineKeyboardButton("📢 Broadcast", callback_data="panel_broadcast"),
+            InlineKeyboardButton("📊 Stats", callback_data="panel_stats")
+        ]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+async def panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    if not is_admin(update.effective_user.id):
+        return
+
+    db = load_db()
+
+    text = f"""
+⚙️ <b>ADMIN CONTROL PANEL</b>
+
+🏏 Tournament: <b>{db['tournament_name']}</b>
+
+Teams Registered: <b>{len(db['captains'])}</b>
+Registrations: {"🟢 OPEN" if db["registration_status"] else "🔴 CLOSED"}
+
+Select an action below.
+"""
+
+    await update.message.reply_text(
+        text,
+        parse_mode=ParseMode.HTML,
+        reply_markup=admin_panel()
+    )
+
+async def teams(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    if not is_admin(update.message.from_user.id):
+        return
+
+    db = load_db()
+
+    if not db["captains"]:
+        await update.message.reply_text("No teams registered.")
+        return
+
+    for uid, data in db["captains"].items():
+
+        keyboard = [[
+            InlineKeyboardButton("✏️ Edit", callback_data=f"editteam_{uid}"),
+            InlineKeyboardButton("❌ Remove", callback_data=f"removeteam_{uid}")
+        ]]
+
+        await update.message.reply_text(
+            f"{data['data']}\n\n🆔 <code>{uid}</code>",
+            parse_mode=ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+# =========================
 # START
 # =========================
 
@@ -176,6 +245,83 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await faq(update, context)
     elif data == "register":
         await register(update, context)
+        # =========================
+    # ADMIN PANEL BUTTONS
+    # =========================
+
+    elif data == "panel_teams":
+
+        db = load_db()
+
+        if not db["captains"]:
+            await query.edit_message_text("No teams registered.")
+            return
+
+        await query.edit_message_text("📋 Registered Teams:")
+
+        for uid, data in db["captains"].items():
+
+            keyboard = [[
+                InlineKeyboardButton("✏️ Edit", callback_data=f"editteam_{uid}"),
+                InlineKeyboardButton("❌ Remove", callback_data=f"removeteam_{uid}")
+            ]]
+
+            await context.bot.send_message(
+                query.message.chat_id,
+                f"{data['data']}\n\n🆔 <code>{uid}</code>",
+                parse_mode=ParseMode.HTML,
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+
+
+    elif data == "panel_openreg":
+
+        db = load_db()
+        db["registration_status"] = True
+        save_db(db)
+
+        await query.edit_message_text("🟢 Registrations OPENED", reply_markup=admin_panel())
+
+
+    elif data == "panel_closereg":
+
+        db = load_db()
+        db["registration_status"] = False
+        save_db(db)
+
+        await query.edit_message_text("🔴 Registrations CLOSED", reply_markup=admin_panel())
+
+
+    elif data == "panel_stats":
+
+        db = load_db()
+
+        text = f"""
+📊 <b>BOT STATISTICS</b>
+
+👥 Users: {len(db['users'])}
+🏏 Teams: {len(db['captains'])}
+👮 Admins: {len(db['admins'])}
+"""
+
+        await query.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=admin_panel())
+
+    elif data.startswith("removeteam_"):
+
+        uid = data.split("_")[1]
+
+        db = load_db()
+
+        if uid not in db["captains"]:
+            await query.answer("Team not found", show_alert=True)
+            return
+
+        team = db["captains"].pop(uid)
+        save_db(db)
+
+        await query.edit_message_text(
+            f"❌ Team Removed\n\n{team['data']}"
+        )
 
 # =========================
 # RULES / FAQ / COLESIUM
@@ -191,6 +337,7 @@ async def faq(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = """❓ FAQ
 ━━━━━━━━━━━━━━━━━━━━
 How to register? <blockquote>Use /register</blockquote>
+Squad size? <blockquote>14 Players</blockquote>
 Where matches happen? <blockquote>DPDL Coliseum</blockquote>
 Prize? <blockquote>Tentative but no commitments</blockquote>
 """
@@ -308,6 +455,32 @@ f"💬 <b>Captain Username:</b> {pending['username']}\n\n"
     # -----------------------------
     await handle_user_general_message(update, context, db)
 
+    # =========================
+    # ADMIN TEAM EDIT
+    # =========================
+
+    if "edit_team" in context.user_data:
+
+        uid = context.user_data.pop("edit_team")
+
+        parts = text.split("|")
+
+        if len(parts) != 3:
+            await update.message.reply_text("Invalid format.\nUse:\nTEAM | CAPTAIN | @USERNAME")
+            return
+
+        team, captain, username = [x.strip() for x in parts]
+
+        db["captains"][uid] = {
+            "username": username,
+            "data": f"🏏 {team}\n👤 {captain}\n💬 {username}"
+        }
+
+        save_db(db)
+
+        await update.message.reply_text("✅ Team updated.")
+        return
+
 # =========================
 # FORWARD USER MESSAGES TO ADMIN
 # =========================
@@ -374,6 +547,32 @@ async def admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif update.message.document:
         caption = update.message.caption or ""
         await context.bot.send_document(user_id, update.message.document.file_id, caption=caption)
+
+async def addteam(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    if not is_admin(update.effective_user.id):
+        return
+
+    text = " ".join(context.args)
+
+    if "|" not in text:
+        await update.message.reply_text("Usage:\n/addteam TEAM | CAPTAIN | @USERNAME")
+        return
+
+    team, captain, username = [x.strip() for x in text.split("|")]
+
+    db = load_db()
+
+    uid = str(max([int(x) for x in db["captains"].keys()] + [1000]) + 1)
+
+    db["captains"][uid] = {
+        "username": username,
+        "data": f"🏏 {team}\n👤 {captain}\n💬 {username}"
+    }
+
+    save_db(db)
+
+    await update.message.reply_text("✅ Team added manually.")
 
 # =========================
 # ADMIN COMMANDS
@@ -468,6 +667,8 @@ def main():
     app.add_handler(CommandHandler("teams", teams))
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(CommandHandler("cancel", cancel_registration))
+    app.add_handler(CommandHandler("panel", panel))
+    app.add_handler(CommandHandler("addteam", addteam))
 
     app.add_handler(CallbackQueryHandler(menu_handler))
     app.add_handler(MessageHandler(filters.ChatType.PRIVATE, user_message))
