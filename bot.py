@@ -94,8 +94,8 @@ def admin_panel_markup():
 # ADMIN PANEL COMMAND
 # =========================
 
-async def panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/panel — show admin control panel"""
+async def panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Command handler for /panel — show admin control panel"""
     user_id = update.effective_user.id
     if not is_admin(user_id):
         return
@@ -114,13 +114,32 @@ async def panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=admin_panel_markup())
 
 
+# Compatibility helper: send admin panel as reply text to a chat id
+async def _send_admin_panel_to_chat(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
+    db = load_db()
+    text = (
+        f"⚙️ <b>ADMIN CONTROL PANEL</b>\n\n"
+        f"🏏 Tournament: <b>{db['tournament_name']}</b>\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🏏 Teams Registered: <b>{len(db['captains'])}</b>\n\n"
+        f"📝 Registrations: {'🟢 OPEN' if db['registration_status'] else '🔴 CLOSED'}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"Select an action below."
+    )
+    await context.bot.send_message(chat_id, text, parse_mode=ParseMode.HTML, reply_markup=admin_panel_markup())
+
+
 # =========================
 # TEAM VIEW (paginated) helpers
 # =========================
 
 def _get_sorted_team_list(db):
     # Return list of (uid, data) tuples in deterministic order
-    return sorted(db["captains"].items(), key=lambda kv: int(kv[0]))
+    try:
+        return sorted(db["captains"].items(), key=lambda kv: int(kv[0]))
+    except Exception:
+        # fallback to insertion order
+        return list(db["captains"].items())
 
 
 async def show_team_page(query, page_index: int):
@@ -214,13 +233,15 @@ async def cancel_registration(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """All inline button callbacks come here."""
     query = update.callback_query
+    if not query:
+        return
     await query.answer()
     data = query.data or ""
     user = query.from_user
 
     # Protect admin-only panel callbacks
     admin_only_prefixes = ("panel_", "removeteam_", "editteam_", "confirmremove_", "panel_back", "panel_addteam", "panel_openreg", "panel_closereg", "panel_stats", "panel_broadcast")
-    if data.startswith(admin_only_prefixes) and not is_admin(user.id):
+    if any(data.startswith(p) for p in admin_only_prefixes) and not is_admin(user.id):
         await query.answer("Unauthorized", show_alert=True)
         return
 
@@ -228,8 +249,15 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ===== PANEL NAV =====
     if data == "panel_back":
-        # return to main admin panel view
-        await panel(query, context)
+        # Show admin panel in place of callback message
+        await query.edit_message_text(
+            f"⚙️ <b>ADMIN CONTROL PANEL</b>\n\n"
+            f"🏏 Tournament: <b>{db['tournament_name']}</b>\n\n"
+            f"🏏 Teams Registered: <b>{len(db['captains'])}</b>\n\n"
+            f"📝 Registrations: {'🟢 OPEN' if db['registration_status'] else '🔴 CLOSED'}",
+            parse_mode=ParseMode.HTML,
+            reply_markup=admin_panel_markup()
+        )
         return
 
     if data.startswith("panel_teams_"):
@@ -291,14 +319,23 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db["registration_status"] = True
         save_db(db)
         await query.answer("Registrations opened")
-        await panel(query, context)
+        # replace message with updated panel
+        await query.edit_message_text(
+            f"🟢 Registrations OPENED\n\nUse the panel below.",
+            parse_mode=ParseMode.HTML,
+            reply_markup=admin_panel_markup()
+        )
         return
 
     if data == "panel_closereg":
         db["registration_status"] = False
         save_db(db)
         await query.answer("Registrations closed")
-        await panel(query, context)
+        await query.edit_message_text(
+            f"🔴 Registrations CLOSED\n\nUse the panel below.",
+            parse_mode=ParseMode.HTML,
+            reply_markup=admin_panel_markup()
+        )
         return
 
     if data == "panel_stats":
@@ -319,14 +356,36 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # --- fallback for other callback usages (rules, faq, register etc.) ---
     if data == "rules":
-        await rules(query, context)
+        # reply to same chat with rules (do not edit panel message)
+        text = "📜 TOURNAMENT RULEBOOK\n\nTo be Announced Soon!"
+        await query.message.reply_text(text, parse_mode=ParseMode.HTML)
         return
+
     if data == "faq":
-        await faq(query, context)
+        text = (
+            "❓ FAQ\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "How to register? Use /register\n"
+            "Squad size? 14 Players\n"
+            "Where matches happen? DPDL Coliseum\n"
+            "Prize? Tentative"
+        )
+        await query.message.reply_text(text, parse_mode=ParseMode.HTML)
         return
+
     if data == "register":
-        await register(query, context)
-        return
+        # If pressed within private chat, start registration in that chat
+        if query.message.chat.type == ChatType.PRIVATE:
+            # start registration
+            db["pending_registration"][str(query.from_user.id)] = {"step": 1}
+            save_db(db)
+            await query.message.reply_text("📝 <b>TEAM REGISTRATION - STEP 1/3</b>\n\nSend your <b>Team Name</b> 🏏:", parse_mode=ParseMode.HTML)
+            return
+        else:
+            # show DM button
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("📩 Register in DM", url=f"https://t.me/{context.bot.username}?start=register")]])
+            await query.message.reply_text("Registration must be completed in the private chat! ⬇️", reply_markup=keyboard)
+            return
 
     # unknown callback_data
     await query.answer()
@@ -345,10 +404,10 @@ async def faq(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "❓ FAQ\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "How to register? <blockquote>Use /register</blockquote>\n"
-        "Squad size? <blockquote>14 Players</blockquote>\n"
-        "Where matches happen? <blockquote>DPDL Coliseum</blockquote>\n"
-        "Prize? <blockquote>Tentative</blockquote>"
+        "How to register? Use /register\n"
+        "Squad size? 14 Players\n"
+        "Where matches happen? DPDL Coliseum\n"
+        "Prize? Tentative"
     )
     await update.effective_message.reply_text(text, parse_mode=ParseMode.HTML)
 
@@ -375,7 +434,7 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.effective_message.reply_text(f"🚫<b>REGISTRATIONS CLOSED</b>\n\n🏏 {db['tournament_name']}", parse_mode=ParseMode.HTML)
         return
 
-    # If user clicked button (callback) or used /register in group, send link to DM
+    # If not private, send DM link
     if update.effective_chat.type != ChatType.PRIVATE:
         keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("📩 Register in DM", url=f"https://t.me/{context.bot.username}?start=register")]])
         await update.effective_message.reply_text("Registration must be completed in the private chat! ⬇️", reply_markup=keyboard)
@@ -507,7 +566,7 @@ def _generate_new_team_uid(db):
     if not db["captains"]:
         return "1001"
     try:
-        current_max = max(int(k) for k in db["captains"].keys())
+        current_max = max(int(k) for k in db["captains"].keys() if str(k).isdigit())
         return str(current_max + 1)
     except Exception:
         # fallback
@@ -698,7 +757,7 @@ def main():
     app.add_handler(CommandHandler("register", register))
     app.add_handler(CommandHandler("rules", rules))
     app.add_handler(CommandHandler("faq", faq))
-    app.add_handler(CommandHandler("panel", panel))
+    app.add_handler(CommandHandler("panel", panel_command))
     app.add_handler(CommandHandler("cancel", cancel_registration))
     app.add_handler(CommandHandler("Colesium", Colesium_cmd))
 
