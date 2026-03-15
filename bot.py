@@ -1,6 +1,9 @@
+# bot.py
+import os
 import json
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode, ChatType
+from database import init_db, load_db, save_db, get_conn
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -11,36 +14,6 @@ from telegram.ext import (
 )
 
 import config
-
-# =========================
-# DATABASE
-# =========================
-
-DB_FILE = "database.json"
-
-
-def load_db():
-    try:
-        with open(DB_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except Exception:
-        data = {}
-
-    data.setdefault("captains", {})               # uid -> { username, data }
-    data.setdefault("message_map", {})            # admin message id -> user id
-    data.setdefault("admins", [config.OWNER_ID])  # editable admins
-    data.setdefault("registration_status", False)
-    data.setdefault("tournament_name", "Dice Pe Destiny League")
-    data.setdefault("users", [])                  # users who started bot (for broadcast)
-    data.setdefault("pending_registration", {})   # user_id -> pending fields
-
-    return data
-
-
-def save_db(data):
-    with open(DB_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4, ensure_ascii=False)
-
 
 # =========================
 # ADMIN CHECK (includes permanent admins from config)
@@ -98,6 +71,7 @@ async def panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /panel — show admin control panel"""
     user_id = update.effective_user.id
     if not is_admin(user_id):
+        await update.message.reply_text("Unauthorized.")
         return
 
     db = load_db()
@@ -112,21 +86,6 @@ async def panel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=admin_panel_markup())
-
-
-# Compatibility helper: send admin panel as reply text to a chat id
-async def _send_admin_panel_to_chat(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
-    db = load_db()
-    text = (
-        f"⚙️ <b>ADMIN CONTROL PANEL</b>\n\n"
-        f"🏏 Tournament: <b>{db['tournament_name']}</b>\n\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"🏏 Teams Registered: <b>{len(db['captains'])}</b>\n\n"
-        f"📝 Registrations: {'🟢 OPEN' if db['registration_status'] else '🔴 CLOSED'}\n\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"Select an action below."
-    )
-    await context.bot.send_message(chat_id, text, parse_mode=ParseMode.HTML, reply_markup=admin_panel_markup())
 
 
 # =========================
@@ -247,9 +206,54 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     db = load_db()
 
+    # ===== REGISTRATION CONFIRM =====
+    if data == "confirm_registration":
+        user_id = str(query.from_user.id)
+
+        if user_id not in db.get("pending_registration", {}):
+            await query.answer("Registration expired.", show_alert=True)
+            return
+
+        pending = db["pending_registration"].pop(user_id)
+
+        uid = _generate_new_team_uid(db)
+
+        db["captains"][uid] = {
+            "username": pending["username"],
+            "data": f"🏏 {pending['team_name']}\n👤 {pending['captain_name']}\n💬 {pending['username']}"
+        }
+
+        save_db(db)
+
+        await query.edit_message_text(
+            f"✅ <b>REGISTRATION COMPLETE</b>\n\n"
+            f"🏏 {pending['team_name']}\n"
+            f"👤 {pending['captain_name']}\n"
+            f"💬 {pending['username']}\n\n"
+            f"🆔 Team ID: <code>{uid}</code>",
+            parse_mode=ParseMode.HTML
+        )
+        return
+
+    # ===== EDIT REGISTRATION =====
+    if data == "edit_registration":
+        user_id = str(query.from_user.id)
+
+        if user_id not in db.get("pending_registration", {}):
+            await query.answer("Registration expired.", show_alert=True)
+            return
+
+        db["pending_registration"][user_id]["step"] = 1
+        save_db(db)
+
+        await query.edit_message_text(
+            "✏️ <b>EDIT REGISTRATION</b>\n\nSend your <b>Team Name</b> again:",
+            parse_mode=ParseMode.HTML
+        )
+        return
+
     # ===== PANEL NAV =====
     if data == "panel_back":
-        # Show admin panel in place of callback message
         await query.edit_message_text(
             f"⚙️ <b>ADMIN CONTROL PANEL</b>\n\n"
             f"🏏 Tournament: <b>{db['tournament_name']}</b>\n\n"
@@ -552,7 +556,8 @@ async def user_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Please confirm your registration ✅ or edit ✏️"
             )
             keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("✅ Confirm", callback_data="confirm_registration"), InlineKeyboardButton("✏️ Edit", callback_data="edit_registration")]
+                [InlineKeyboardButton("✅ Confirm", callback_data="confirm_registration"),
+                 InlineKeyboardButton("✏️ Edit", callback_data="edit_registration")]
             ])
             await update.message.reply_text(summary, parse_mode=ParseMode.HTML, reply_markup=keyboard)
             return
@@ -563,14 +568,15 @@ async def user_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # small helper to generate new UID
 def _generate_new_team_uid(db):
-    if not db["captains"]:
+    # Try to follow your old heuristic: choose max numeric UID and +1, fallback to 1001
+    keys = [k for k in db.get("captains", {}).keys() if str(k).isdigit()]
+    if not keys:
         return "1001"
     try:
-        current_max = max(int(k) for k in db["captains"].keys() if str(k).isdigit())
+        current_max = max(int(k) for k in keys)
         return str(current_max + 1)
     except Exception:
-        # fallback
-        existing = [int(k) for k in db["captains"].keys() if k.isdigit()]
+        existing = [int(k) for k in keys if k.isdigit()]
         if not existing:
             return "1001"
         return str(max(existing) + 1)
@@ -750,6 +756,9 @@ async def stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =========================
 
 def main():
+    # initialize DB (pool, tables, optional import from local JSON)
+    init_db()
+
     app = Application.builder().token(config.BOT_TOKEN).build()
 
     # user commands
